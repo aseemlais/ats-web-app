@@ -1,0 +1,20 @@
+command: ["npm", "run", "start"]
+runtime: nodejs20
+
+env:
+  - name: DATABRICKS_SERVING_ENDPOINT
+    valueFrom: serving-endpoint
+
+  - name: RESEND_API_KEY
+    valueFrom: secret
+
+  - name: RESEND_FROM_EMAIL
+    value: "Resume Screening <onboarding@resend.dev>"
+
+  - name: APP_URL
+    value: "https://agent-resume-screening-7474659141344215.aws.databricksapps.com"
+
+  # FEEDBACK RESOURCE: Uncomment to enable the feedback UI
+  # (requires experiment resource in databricks.yml)
+  # - name: MLFLOW_EXPERIMENT_ID
+  #   valueFrom: experiment
