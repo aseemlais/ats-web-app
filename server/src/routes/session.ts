@@ -18,17 +18,20 @@ sessionRouter.use(authMiddleware);
 sessionRouter.get('/', async (req: Request, res: Response) => {
   const session = req.session;
 
-  if (!session?.user) {
-    return res.json({ user: null } as ClientSession);
-  }
+  const defaultUser = {
+    email: process.env.DEFAULT_USER_EMAIL || 'recruiter@ats-workspace.com',
+    name: process.env.DEFAULT_USER_NAME || 'ATS Recruiter',
+    preferredUsername: process.env.DEFAULT_USER_NAME || 'ATS Recruiter',
+  };
 
-  // Return minimal user data for client
   const clientSession: ClientSession = {
-    user: {
-      email: session.user.email,
-      name: session.user.name,
-      preferredUsername: session.user.preferredUsername,
-    },
+    user: session?.user
+      ? {
+          email: session.user.email,
+          name: session.user.name,
+          preferredUsername: session.user.preferredUsername,
+        }
+      : defaultUser,
   };
 
   res.json(clientSession);

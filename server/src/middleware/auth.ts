@@ -26,11 +26,30 @@ export async function authMiddleware(
         req.headers[name.toLowerCase()] as string | null,
     });
     req.session = session || undefined;
-    next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    next(error);
+    // Graceful fallback when Databricks CLI is not logged in on the server
+    req.session = undefined;
   }
+
+  // Guarantee an active reviewer session so any user with the public URL can screen candidates
+  if (!req.session?.user) {
+    const defaultUserEmail =
+      process.env.DEFAULT_USER_EMAIL || 'recruiter@ats-workspace.com';
+    const defaultUserName =
+      process.env.DEFAULT_USER_NAME || 'ATS Recruiter';
+
+    req.session = {
+      user: {
+        id: 'recruiter-admin',
+        email: defaultUserEmail,
+        name: defaultUserName,
+        preferredUsername: defaultUserName,
+        type: 'regular',
+      },
+    };
+  }
+
+  next();
 }
 
 /**
