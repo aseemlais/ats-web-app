@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../node_modules/tsx/dist/cli.mjs watch --inspect src/index.ts",
+    "dev": "tsx watch --inspect src/index.ts",
     "build": "tsdown && node scripts/copy-pdf-worker.mjs",
     "start": "node --env-file-if-exists ../.env dist/index.mjs"
   },
