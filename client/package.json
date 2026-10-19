@@ -47,21 +47,21 @@
     "tailwind-merge": "^2.5.2",
     "use-stick-to-bottom": "^1.1.1",
     "usehooks-ts": "^3.1.0",
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@chat-template/auth": "*",
-    "@chat-template/core": "*",
-    "@chat-template/db": "*",
+    "zod": "^4.3.5",
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/typography": "^0.5.19",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.2.1",
     "postcss": "^8",
     "tailwindcss": "^4.1.13",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.9.3",
     "vite": "npm:rolldown-vite@latest"
+  },
+  "devDependencies": {
+    "@chat-template/auth": "*",
+    "@chat-template/core": "*",
+    "@chat-template/db": "*",
+    "@types/react": "^18",
+    "@types/react-dom": "^18"
   }
 }
