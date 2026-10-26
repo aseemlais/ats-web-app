@@ -62,6 +62,7 @@ type ScreeningResult = {
   email: string;
   phone: string;
   currentRole: string;
+  jobRole?: string;
   experience: string;
   skills: string[];
   educationDetails: string;
@@ -404,9 +405,20 @@ function normalizeResult(
 
     currentRole:
       safeString(
-        parsed.currentRole ??
+        parsed.jobRole ??
+          parsed.job_role ??
+          parsed.currentRole ??
           parsed.current_role,
-        'Not available',
+        'Role not identified',
+      ),
+
+    jobRole:
+      safeString(
+        parsed.jobRole ??
+          parsed.job_role ??
+          parsed.currentRole ??
+          parsed.current_role,
+        'Role not identified',
       ),
 
     experience:
@@ -521,7 +533,8 @@ function parseScreeningResult(
 
       phone: 'Not available',
 
-      currentRole: 'Not available',
+      currentRole: 'Role not identified',
+      jobRole: 'Role not identified',
 
       experience: 'Not available',
 
@@ -1923,8 +1936,8 @@ Rules:
               result?.candidateName || 'Not available',
             Email: result?.email || 'Not available',
             Phone: result?.phone || 'Not available',
-            'Current Role':
-              result?.currentRole || 'Not available',
+            'Job Role':
+              result?.jobRole || result?.currentRole || 'Role not identified',
             Experience:
               result?.experience || 'Not available',
             Skills: skills,
@@ -3413,6 +3426,7 @@ function ResultsView({
       result.email,
       result.phone,
       result.currentRole,
+      result.jobRole,
       result.experience,
       result.educationDetails,
       ...result.skills,
@@ -3564,7 +3578,7 @@ function ResultsView({
               <tr>
                 <th className="px-5 py-4">Rank</th>
                 <th className="px-5 py-4">Candidate</th>
-                <th className="px-5 py-4">Current Role</th>
+                <th className="px-5 py-4">Job Role</th>
                 <th className="px-5 py-4">ATS Score</th>
                 <th className="px-5 py-4">Shortlist</th>
                 <th className="px-5 py-4">Reason</th>
@@ -3613,7 +3627,7 @@ function ResultsView({
                       </td>
 
                       <td className="max-w-[240px] whitespace-normal break-words px-5 py-4 text-sm leading-5 text-[#5b7890]">
-                        {result.currentRole || 'Not available'}
+                        {result.jobRole || result.currentRole || 'Role not identified'}
                       </td>
 
                       <td className="px-5 py-4">
@@ -3791,7 +3805,7 @@ function CandidateAssessment({
               Role & Experience
             </div>
             <div className="mt-0.5 break-words text-sm font-semibold leading-5 text-[#033c67]">
-              {result.currentRole || 'Not available'} · {result.experience || 'Not available'}
+              {result.jobRole || result.currentRole || 'Role not identified'} · {result.experience || 'Not available'}
             </div>
           </div>
 
