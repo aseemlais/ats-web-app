@@ -257,6 +257,139 @@ function safeString(
     : fallback;
 }
 
+// ---------------------------------------------------------------------------
+// Client-side role sanitization
+// Fixes stale Supabase records that contain tool names, date strings,
+// company fragments or other bad values instead of a proper job role.
+// ---------------------------------------------------------------------------
+
+const KNOWN_TOOLS_LC = new Set([
+  'jupyter notebook', 'jupyter', 'vs code', 'visual studio code', 'visual studio',
+  'git', 'github', 'gitlab', 'bitbucket', 'docker', 'kubernetes', 'linux', 'ubuntu',
+  'windows', 'postman', 'figma', 'jira', 'jenkins', 'aws', 'amazon web services',
+  'azure', 'gcp', 'google cloud platform', 'google cloud', 'react', 'react.js', 'reactjs',
+  'angular', 'vue', 'node', 'node.js', 'nodejs', 'express', 'django', 'flask', 'fastapi',
+  'spring boot', 'spring', 'mysql', 'postgresql', 'mongodb', 'redis', 'sqlite', 'oracle',
+  'pandas', 'numpy', 'scipy', 'scikit-learn', 'sklearn', 'tensorflow', 'pytorch', 'keras',
+  'opencv', 'tableau', 'power bi', 'powerbi', 'excel', 'ms excel', 'word', 'powerpoint',
+  'c', 'c++', 'c#', 'java', 'python', 'javascript', 'typescript', 'html', 'css', 'sql',
+  'r', 'php', 'ruby', 'rust', 'go', 'golang', 'matlab', 'hadoop', 'spark', 'pyspark',
+  'rest api', 'graphql', 'tailwind', 'bootstrap',
+]);
+
+const ROLE_KEYWORDS_LC = [
+  'developer', 'engineer', 'analyst', 'scientist', 'architect', 'consultant',
+  'specialist', 'manager', 'lead', 'administrator', 'associate', 'director',
+  'coordinator', 'officer', 'executive', 'programmer', 'technician', 'researcher',
+  'designer', 'instructor', 'assistant', 'intern', 'trainee', 'fellow', 'expert',
+  'founder', 'head', 'cto', 'ceo', 'vp',
+];
+
+const COMPANY_SUFFIX_RE =
+  /\b(pvt\.?\s*ltd\.?|private\s+limited|limited|technologies|solutions|services|labs|academy|inc\.?|corp\.?|llc|llp|pvt|consultancy|consulting|enterprises|holdings|agency)\b/i;
+
+const DATE_STRING_RE =
+  /^[\s\d\/\.\-–—,]*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|present|current|now)?[\s\d\/\.\-–—,]*$/i;
+
+const DATE_PREFIX_RE =
+  /^[\d]{1,2}[\/\.\-][\d]{4}/;
+
+const BRACKET_DURATION_RE =
+  /\[\s*\d+\s*month/i;
+
+/**
+ * Returns true if the value looks like a date interval, e.g.
+ *  "06/2025 - 06/2025"   "/2025 - 06/2025"   "July 2024 - Aug 2024"
+ */
+function looksLikeDate(value: string): boolean {
+  const v = value.trim();
+  if (DATE_PREFIX_RE.test(v)) return true;
+  if (DATE_STRING_RE.test(v) && v.length < 40) return true;
+  if (/\b\d{4}\s*[-–—]\s*\d{4}\b/.test(v)) return true;
+  if (/\b\d{4}\s*[-–—]\s*(present|current|now)\b/i.test(v)) return true;
+  return false;
+}
+
+/** Returns true if the value is a known tool/skill name. */
+function looksLikeTool(value: string): boolean {
+  return KNOWN_TOOLS_LC.has(value.toLowerCase().trim());
+}
+
+/** Returns true if the value is a company entity with no role word. */
+function looksLikeCompany(value: string): boolean {
+  const v = value.toLowerCase();
+  const hasRoleWord = ROLE_KEYWORDS_LC.some((kw) => v.includes(kw));
+  if (hasRoleWord) return false;
+  return COMPANY_SUFFIX_RE.test(value);
+}
+
+/** Returns true if the value contains a '[1Month' / 'InternBoot' style garbage fragment. */
+function looksLikeGarbage(value: string): boolean {
+  if (BRACKET_DURATION_RE.test(value)) return true;
+  // Flagged: extremely long strings or strings that have no role keyword at all
+  if (value.length > 80) return true;
+  return false;
+}
+
+/**
+ * Attempt to recover a clean role label from experience / summary text fragments.
+ * Returns the first line that contains a role keyword or null if nothing suitable found.
+ */
+function recoverRoleFromContext(
+  relevantExperience: string[],
+  summary: string,
+): string | null {
+  const candidates = [...relevantExperience, summary].filter(Boolean);
+  for (const text of candidates) {
+    for (const line of text.split(/[\n,;]/)) {
+      const l = line.trim();
+      if (!l || l.length > 70) continue;
+      const lc = l.toLowerCase();
+      if (ROLE_KEYWORDS_LC.some((kw) => lc.includes(kw))) {
+        // Quick cleanse: strip leading bullets / dashes
+        const clean = l.replace(/^[-*•]\s*/, '').trim();
+        if (clean.length >= 3 && clean.length <= 70) return clean;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Sanitizes a raw candidate role string loaded from Supabase.
+ * Rejects bad values (dates, tools, company names, garbage) and attempts
+ * recovery from context before falling back to 'Role not identified'.
+ */
+function sanitizeCandidateRole(
+  rawRole: string | undefined | null,
+  relevantExperience: string[],
+  summary: string,
+): string {
+  const FALLBACK = 'Role not identified';
+
+  if (!rawRole || rawRole === FALLBACK || rawRole === 'Not available') {
+    const recovered = recoverRoleFromContext(relevantExperience, summary);
+    return recovered ?? FALLBACK;
+  }
+
+  const v = rawRole.trim();
+
+  // Reject clearly bad values
+  if (
+    looksLikeDate(v) ||
+    looksLikeTool(v) ||
+    looksLikeGarbage(v) ||
+    (looksLikeCompany(v) && !ROLE_KEYWORDS_LC.some((kw) => v.toLowerCase().includes(kw)))
+  ) {
+    const recovered = recoverRoleFromContext(relevantExperience, summary);
+    return recovered ?? FALLBACK;
+  }
+
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+
 function normalizeResult(
   parsed: Record<string, unknown>,
   raw: string,
@@ -403,23 +536,29 @@ function normalizeResult(
         'Not available',
       ),
 
-    currentRole:
+    currentRole: sanitizeCandidateRole(
       safeString(
         parsed.jobRole ??
           parsed.job_role ??
           parsed.currentRole ??
           parsed.current_role,
-        'Role not identified',
-      ),
+        '',
+      ) || null,
+      safeArray(parsed.relevantExperience),
+      safeString(parsed.summary ?? parsed.candidateSummary, ''),
+    ),
 
-    jobRole:
+    jobRole: sanitizeCandidateRole(
       safeString(
         parsed.jobRole ??
           parsed.job_role ??
           parsed.currentRole ??
           parsed.current_role,
-        'Role not identified',
-      ),
+        '',
+      ) || null,
+      safeArray(parsed.relevantExperience),
+      safeString(parsed.summary ?? parsed.candidateSummary, ''),
+    ),
 
     experience:
       safeString(
