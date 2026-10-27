@@ -93,13 +93,22 @@ filesRouter.post(
         await fs.readFile(filePath);
 
       let resumeText = '';
+      let pythonResult: {
+        candidateId?: string | null;
+        isDuplicate?: boolean;
+        storageObjectPath?: string | null;
+        persistenceStatus?: string;
+        candidateName?: string;
+        jobRole?: string;
+      } | null = null;
 
       // ------------------------------------------------------
-      // Try Python ATS Layout-Aware Parser (PyMuPDF)
+      // Try Python ATS Layout-Aware Parser & Persistent Storage
       // ------------------------------------------------------
 
       const pythonAtsUrl =
         process.env.PYTHON_ATS_URL ||
+        (process.env.API_PROXY ? process.env.API_PROXY.replace(/\/invocations\/?$/, '') : '') ||
         'http://localhost:8000';
 
       try {
@@ -120,16 +129,32 @@ filesRouter.post(
         if (atsResp.ok) {
           const atsData = (await atsResp.json()) as {
             resumeText?: string;
+            candidateId?: string | null;
+            isDuplicate?: boolean;
+            storageObjectPath?: string | null;
+            persistenceStatus?: string;
+            candidateName?: string;
+            jobRole?: string;
           };
           if (atsData?.resumeText) {
             resumeText = atsData.resumeText.trim();
+            pythonResult = atsData;
             console.log(
-              `[Files] Resume extracted via Python layout-aware ATS: ${originalName}`,
+              `[Files] Resume extracted via Python layout-aware ATS: ${originalName} (persistence: ${atsData.persistenceStatus || 'persisted'})`,
             );
           }
+        } else {
+          const errData = await atsResp.json().catch(() => ({}));
+          console.warn(
+            `[Files] Python ATS upload returned status ${atsResp.status}:`,
+            errData,
+          );
         }
-      } catch {
-        // Fall back gracefully to local parser
+      } catch (err) {
+        console.warn(
+          '[Files] Could not connect to Python ATS backend, falling back to local parser:',
+          err,
+        );
       }
 
       // ------------------------------------------------------
@@ -217,6 +242,13 @@ filesRouter.post(
         contentType,
 
         resumeText,
+
+        candidateId: pythonResult?.candidateId || null,
+        isDuplicate: Boolean(pythonResult?.isDuplicate),
+        storageObjectPath: pythonResult?.storageObjectPath || null,
+        persistenceStatus: pythonResult?.persistenceStatus || (pythonResult ? 'persisted' : 'temporary_in_memory'),
+        candidateName: pythonResult?.candidateName,
+        jobRole: pythonResult?.jobRole,
       });
     } catch (error) {
       console.error(
