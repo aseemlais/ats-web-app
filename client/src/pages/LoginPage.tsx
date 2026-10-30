@@ -1,13 +1,7 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 type AuthView = "login" | "create" | "forgot";
-
-type RegisteredUser = {
-  name: string;
-  email: string;
-  password: string;
-};
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -45,33 +39,6 @@ function EyeIcon({ open }: { open: boolean }) {
     </svg>
   );
 }
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
-// removed mock local storage
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -322,16 +289,6 @@ export default function LoginPage() {
     setConfirmPassword("");
   };
 
-  const registeredUsers = getRegisteredUsers();
-
-  const isReturningUser =
-    email.trim() !== "" &&
-    registeredUsers.some(
-      (user) =>
-        user.email.toLowerCase() ===
-        email.trim().toLowerCase(),
-    );
-
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 relative overflow-hidden">
 
@@ -536,9 +493,7 @@ export default function LoginPage() {
                 {view === "login" && (
                   <>
                     <h2 className="text-2xl font-bold text-slate-950">
-                      {isReturningUser
-                        ? "Welcome back"
-                        : "Welcome"}
+                      {"Welcome"}
                     </h2>
 
                     <p className="text-sm text-slate-500 mt-2">
