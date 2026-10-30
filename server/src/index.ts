@@ -1,4 +1,4 @@
-// Load environment variables FIRST before any other imports
+﻿// Load environment variables FIRST before any other imports
 import './env';
 
 import express, {
@@ -8,9 +8,11 @@ import express, {
   type Express,
 } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { chatRouter } from './routes/chat';
 import authRouter from './routes/auth';
@@ -21,6 +23,8 @@ import { messagesRouter } from './routes/messages';
 import { configRouter } from './routes/config';
 import { feedbackRouter } from './routes/feedback';
 import { filesRouter } from './routes/files';
+import { candidatesRouter } from './routes/candidates';
+import { authMiddleware, requireAuth } from './middleware/auth';
 import { ChatSDKError } from '@chat-template/core/errors';
 
 // ESM-compatible __dirname
@@ -53,6 +57,12 @@ app.use(
   }),
 );
 
+// ============================================================
+// COOKIE PARSING
+// ============================================================
+
+// Required for reading the reviewer session cookie
+app.use(cookieParser());
 // ============================================================
 // BODY PARSING
 // ============================================================
@@ -97,6 +107,8 @@ app.use('/api/feedback', feedbackRouter);
 
 app.use('/api/files', filesRouter);
 
+app.use('/api/candidates', candidatesRouter);
+
 // ============================================================
 // AGENT BACKEND PROXY
 // ============================================================
@@ -128,6 +140,8 @@ console.log(
 
 app.all(
   '/invocations',
+  authMiddleware,
+  requireAuth,
   async (
     req: Request,
     res: Response,
@@ -147,6 +161,7 @@ app.all(
       // The fetch() call below will calculate the
       // correct content length.
       delete forwardHeaders['content-length'];
+      delete forwardHeaders['cookie'];
 
       const requestBody =
         req.method !== 'GET' &&
@@ -316,7 +331,7 @@ async function startServer() {
       const {
         mockServer,
       } = await import(
-        modulePath
+        pathToFileURL(modulePath).href
       );
 
       mockServer.listen({

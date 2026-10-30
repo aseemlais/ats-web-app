@@ -11,15 +11,10 @@ node_modules
 # testing
 coverage
 
-# next.js & vite build output
+# next.js
 .next/
 out/
-build/
-dist/
-client/dist/
-server/dist/
-*.bak
-*_FULL.*
+build
 
 # misc
 .DS_Store
@@ -55,3 +50,13 @@ tsconfig.tsbuildinfo
 
 # Databricks bundle state - exclude to prevent stale state when copying the project
 .databricks
+
+# Build outputs
+build/
+dist/
+client/dist/
+server/dist/
+
+# Backup files
+*.bak
+*_FULL.*

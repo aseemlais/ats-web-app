@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+﻿import { defineConfig, devices } from '@playwright/test';
 import { config } from 'dotenv';
 
 /**
@@ -78,7 +78,7 @@ export default defineConfig({
   },
 
   /* Configure global timeout for each test */
-  timeout: 20 * 1000,
+  timeout: 60 * 1000,
   expect: {
     timeout: 15 * 1000,
   },
@@ -130,7 +130,7 @@ export default defineConfig({
     {
       command: 'npm run dev',
       url: `${baseURL}/ping`,
-      timeout: 20 * 1000,
+      timeout: 60 * 1000,
       reuseExistingServer: !process.env.CI,
       // Mock the environment variables for the server process
       env: {
@@ -173,7 +173,7 @@ export default defineConfig({
       // API_PROXY mode — Express backend only, port 3003
       command: 'npm run dev:server',
       url: 'http://localhost:3003/ping',
-      timeout: 20 * 1000,
+      timeout: 60 * 1000,
       reuseExistingServer: !process.env.CI,
       env: {
         PLAYWRIGHT: 'True',

@@ -34,23 +34,20 @@ function getScopesFromToken(token: string): string[] {
  * scopes are missing — the banner only shows missing scopes.
  */
 configRouter.get('/', async (req: Request, res: Response) => {
-  let missingScopes: string[] = [];
+  const oboInfo = await getEndpointOboInfo();
 
-  try {
-    const oboInfo = await getEndpointOboInfo();
-    missingScopes = oboInfo?.endpointRequiredScopes || [];
+  let missingScopes = oboInfo.endpointRequiredScopes;
 
-    // If the user has an OBO token, check which scopes are already present
-    const userToken = req.headers['x-forwarded-access-token'] as string | undefined;
-    if (userToken && oboInfo?.isEndpointOboEnabled) {
-      const tokenScopes = getScopesFromToken(userToken);
-      missingScopes = (oboInfo.endpointRequiredScopes || []).filter(required => {
-        const parent = required.split('.')[0];
-        return !tokenScopes.some(ts => ts === required || ts === parent);
-      });
-    }
-  } catch {
-    missingScopes = [];
+  // If the user has an OBO token, check which scopes are already present
+  const userToken = req.headers['x-forwarded-access-token'] as string | undefined;
+  if (userToken && oboInfo.isEndpointOboEnabled) {
+    const tokenScopes = getScopesFromToken(userToken);
+    // A required scope like "sql.statement-execution" is satisfied by
+    // an exact match OR by its parent prefix (e.g. "sql")
+    missingScopes = oboInfo.endpointRequiredScopes.filter(required => {
+      const parent = required.split('.')[0];
+      return !tokenScopes.some(ts => ts === required || ts === parent);
+    });
   }
 
   res.json({

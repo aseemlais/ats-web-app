@@ -1,10 +1,12 @@
-import React, {
+﻿import React, {
   createContext,
   useContext,
   useState,
   useEffect,
   useCallback,
 } from 'react';
+import { apiFetch } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import type { ClientSession } from '@chat-template/auth';
 
 interface SessionContextType {
@@ -25,9 +27,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/session', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/session');
 
       if (!response.ok) {
         throw new Error('Failed to fetch session');
@@ -43,8 +43,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     fetchSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchSession();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [fetchSession]);
 
   return (

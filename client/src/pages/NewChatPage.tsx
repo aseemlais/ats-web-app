@@ -23,7 +23,14 @@ import {
   LogOut,
   ChevronUp,
 } from 'lucide-react';
-import * as XLSX from 'xlsx-js-style';
+import * as XLSX from 'xlsx';
+import { apiFetch } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import {
+  CandidateRepositoryView,
+  fetchCandidateDetail,
+  type StoredCandidate,
+} from '../components/candidate-repository';
 
 type CandidateStatus =
   | 'uploaded'
@@ -78,6 +85,9 @@ type Candidate = {
   status: CandidateStatus;
   result: ScreeningResult | null;
   error?: string;
+  candidateName?: string;
+  originalFilename?: string;
+  fromRepository?: boolean;
 };
 
 type ScreeningResponse = {
@@ -700,7 +710,7 @@ async function callAgent(
     attempt += 1
   ) {
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         '/invocations',
         {
           method: 'POST',
@@ -908,7 +918,7 @@ export default function NewChatPage() {
 
   const [activeView, setActiveView] =
     useState<
-      'screening' | 'results'
+      'screening' | 'results' | 'repository'
     >('screening');
 
   const [jobTitle, setJobTitle] =
@@ -973,7 +983,7 @@ export default function NewChatPage() {
 
     const loadSession = async () => {
       try {
-        const response = await fetch('/api/session', {
+        const response = await apiFetch('/api/session', {
           method: 'GET',
           credentials: 'include',
           headers: { Accept: 'application/json' },
@@ -1154,7 +1164,7 @@ export default function NewChatPage() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/files/upload', {
+        const response = await apiFetch('/api/files/upload', {
           method: 'POST',
           body: formData,
         });
@@ -1284,7 +1294,7 @@ export default function NewChatPage() {
           );
 
           const response =
-            await fetch(
+            await apiFetch(
               '/api/files/upload',
               {
                 method: 'POST',
@@ -1416,7 +1426,7 @@ export default function NewChatPage() {
     setIsFetchingSharePoint(true);
 
     try {
-      const response = await fetch('/api/sharepoint/fetch-resumes', {
+      const response = await apiFetch('/api/sharepoint/fetch-resumes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1523,6 +1533,58 @@ export default function NewChatPage() {
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAddStoredCandidatesToScreening = async (
+    storedList: StoredCandidate[],
+  ) => {
+    if (!storedList.length) return;
+    setError('');
+
+    const addedCandidates: Candidate[] = [];
+
+    for (const stored of storedList) {
+      if (candidates.some((c) => c.id === stored.id)) {
+        continue;
+      }
+
+      try {
+        const detail = await fetchCandidateDetail(stored.id);
+        if (!detail || !detail.resumeText || !detail.resumeText.trim()) {
+          console.warn('Candidate has no extracted resume text:', stored.id);
+          continue;
+        }
+
+        const fallbackFilename = detail.originalFilename?.trim() ||
+          (detail.candidateName ? `${detail.candidateName.replace(/[^\w\s.-]/g, '_')}.txt` : 'candidate.txt');
+
+        const dummyFile = new File(
+          [detail.resumeText],
+          fallbackFilename,
+          { type: 'text/plain' },
+        );
+
+        addedCandidates.push({
+          id: detail.id,
+          file: dummyFile,
+          resumeText: detail.resumeText,
+          status: 'uploaded',
+          result: null,
+          candidateName: detail.candidateName ?? undefined,
+          originalFilename: detail.originalFilename ?? undefined,
+          fromRepository: true,
+        });
+      } catch (err) {
+        console.error('Failed to fetch detail for candidate:', stored.id, err);
+      }
+    }
+
+    if (addedCandidates.length > 0) {
+      setCandidates((current) => [...current, ...addedCandidates]);
+      setActiveView('screening');
+    } else {
+      setError('Could not load resume text for selected candidates.');
     }
   };
 
@@ -2072,7 +2134,7 @@ Rules:
           return {
             Rank: index + 1,
             'Candidate Name':
-              result?.candidateName || 'Not available',
+              result?.candidateName || candidate?.candidateName || candidate.file.name.replace(/\.[^/.]+$/, '') || 'Not available',
             Email: result?.email || 'Not available',
             Phone: result?.phone || 'Not available',
             'Job Role':
@@ -2554,6 +2616,19 @@ Rules:
             >
               Results
             </button>
+
+            <button
+              type="button"
+              disabled={isScreening}
+              onClick={() => setActiveView('repository')}
+              className={`cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                activeView === 'repository'
+                  ? 'bg-[#033c67] text-white'
+                  : 'text-[#7b94a7] hover:bg-[#eef6fa] hover:text-[#033c67]'
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              Repository
+            </button>
           </div>
 
           <div className="relative flex items-center">
@@ -2633,11 +2708,21 @@ Rules:
 
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setIsProfileOpen(false);
+                        try {
+                          await supabase.auth.signOut();
+                        } catch (e) {
+                          console.warn('Supabase sign out error:', e);
+                        }
+                        try {
+                          await apiFetch('/api/auth/logout', { method: 'POST' });
+                        } catch (e) {
+                          console.warn('Server logout error:', e);
+                        }
                         window.localStorage.removeItem('dp_profile_name');
                         setSignOutMessage('Signed out successfully.');
-                        window.location.href = '/api/auth/logout';
+                        window.location.href = '/login';
                       }}
                       className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#164f75] transition hover:bg-red-50 hover:text-red-600"
                     >
@@ -2778,7 +2863,9 @@ Rules:
             isScreening={isScreening}
           />
 
-          {activeView === 'screening' ? (
+          {activeView === 'repository' ? (
+            <CandidateRepositoryView onSelectForScreening={handleAddStoredCandidatesToScreening} />
+          ) : activeView === 'screening' ? (
             isScreening ? (
               <ScreeningProgressView
                 jobTitle={jobTitle}
@@ -2786,6 +2873,7 @@ Rules:
               />
             ) : (
               <ScreeningView
+                onOpenRepository={() => setActiveView('repository')}
                 jobTitle={jobTitle}
                 jobDescription={jobDescription}
                 candidates={candidates}
@@ -2957,6 +3045,7 @@ function ScreeningView({
   isFetchingSharePoint,
   onSharePointLinkChange,
   onSharePointFetch,
+  onOpenRepository,
   onRemove,
   onClearAll,
   isScreening,
@@ -2991,6 +3080,7 @@ function ScreeningView({
   isFetchingSharePoint: boolean;
   onSharePointLinkChange: (value: string) => void;
   onSharePointFetch: () => void;
+  onOpenRepository?: () => void;
   onRemove: (
     id: string,
   ) => void;
@@ -3198,6 +3288,19 @@ function ScreeningView({
               }
             />
 
+            {onOpenRepository && (
+              <div className="mb-4 flex shrink-0 justify-center">
+                <button
+                  type="button"
+                  onClick={onOpenRepository}
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#033c67] shadow-sm transition hover:bg-[#eef6fa] hover:border-[#b9d5e6]"
+                >
+                  <Users className="size-4 text-[#f18a31]" />
+                  Select from Candidate Repository
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() =>
@@ -3258,10 +3361,15 @@ function ScreeningView({
                         </div>
 
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold">
-                            {
-                              candidate.file.name
-                            }
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold">
+                              {candidate.candidateName || candidate.file.name}
+                            </span>
+                            {candidate.fromRepository && (
+                              <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                Repository
+                              </span>
+                            )}
                           </div>
 
                           <div className="mt-1 flex items-center gap-2 text-xs text-[#5b7890]">
@@ -3757,7 +3865,7 @@ function ResultsView({
                           className="cursor-pointer text-left"
                         >
                           <div className="max-w-[260px] break-words font-semibold text-[#033c67] hover:underline">
-                            {result.candidateName || 'Not available'}
+                            {result.candidateName || candidate.candidateName || 'Not available'}
                           </div>
                           <div className="mt-1 text-xs text-[#5b7890]">
                             {result.email}

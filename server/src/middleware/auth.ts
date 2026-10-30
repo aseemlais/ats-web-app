@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { getAuthSession, type AuthSession } from '@chat-template/auth';
 import { checkChatAccess } from '@chat-template/core';
 import { ChatSDKError } from '@chat-template/core/errors';
+import { verifyReviewerCookie } from '../lib/reviewer-auth';
+import { verifySupabaseToken } from '../lib/supabase-auth';
 
 // Extend Express Request type to include session
 declare global {
@@ -13,7 +15,12 @@ declare global {
 }
 
 /**
- * Middleware to authenticate requests and attach session to request object
+ * Middleware to authenticate requests and attach session to request object.
+ *
+ * Authentication Priority:
+ *  1. Verified Databricks SSO identity (in a genuine Databricks environment)
+ *  2. Verified Supabase Auth token (Authorization: Bearer <token>)
+ *  3. Reviewer HMAC-signed session cookie (legacy migration fallback)
  */
 export async function authMiddleware(
   req: Request,
@@ -21,35 +28,37 @@ export async function authMiddleware(
   next: NextFunction,
 ) {
   try {
-    const session = await getAuthSession({
+    // 1. Check Databricks SSO (takes precedence in Databricks Apps or CLI auth)
+    const databricksSession = await getAuthSession({
       getRequestHeader: (name: string) =>
         req.headers[name.toLowerCase()] as string | null,
     });
-    req.session = session || undefined;
+
+    if (databricksSession) {
+      req.session = databricksSession;
+      return next();
+    }
+
+    // 2. Check Supabase Auth access token in Authorization: Bearer <token>
+    const authHeader = req.headers['authorization'];
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const supabaseSession = await verifySupabaseToken(token);
+      if (supabaseSession) {
+        req.session = supabaseSession;
+        return next();
+      }
+    }
+
+    // 3. Fallback: reviewer session cookie (for smooth transition during migration)
+    const reviewerSession = verifyReviewerCookie(req);
+    req.session = reviewerSession ?? undefined;
+
+    next();
   } catch (error) {
-    // Graceful fallback when Databricks CLI is not logged in on the server
-    req.session = undefined;
+    console.error('Auth middleware error:', error);
+    next(error);
   }
-
-  // Guarantee an active reviewer session so any user with the public URL can screen candidates
-  if (!req.session?.user) {
-    const defaultUserEmail =
-      process.env.DEFAULT_USER_EMAIL || 'recruiter@ats-workspace.com';
-    const defaultUserName =
-      process.env.DEFAULT_USER_NAME || 'ATS Recruiter';
-
-    req.session = {
-      user: {
-        id: 'recruiter-admin',
-        email: defaultUserEmail,
-        name: defaultUserName,
-        preferredUsername: defaultUserName,
-        type: 'regular',
-      },
-    };
-  }
-
-  next();
 }
 
 /**

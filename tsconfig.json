@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -17,6 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@chat-template/core": ["./packages/core/src/index.ts"],
+      "@chat-template/core/*": ["./packages/core/src/*"],
       "@chat-template/utils": ["./packages/utils/src/index.ts"],
       "@chat-template/auth": ["./packages/auth/src/index.ts"],
       "@chat-template/ai-sdk-providers": [

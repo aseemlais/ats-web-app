@@ -1,10 +1,17 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import { eq } from 'drizzle-orm';
 
 import { user, passwordResetToken } from '@chat-template/db';
 import { getDb } from '@chat-template/db';
+
+import {
+  verifyReviewerCredentials,
+  issueReviewerCookie,
+  clearReviewerCookie,
+  verifyReviewerCookie,
+} from '../lib/reviewer-auth';
 
 const router = Router();
 
@@ -148,6 +155,95 @@ router.post('/forgot-password', async (req, res) => {
       error: 'Unable to process password reset request',
     });
   }
+});
+
+
+// ============================================================
+// Reviewer authentication (Render deployment)
+// ============================================================
+
+// In-memory rate limiting for login attempts
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * POST /api/auth/login
+ * Verify reviewer credentials and issue a signed session cookie.
+ */
+router.post('/login', async (req, res) => {
+  try {
+    // Rate limit check (bypassed in test mode)
+    if (process.env.PLAYWRIGHT !== 'True') {
+      const clientIp = (req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown').split(',')[0].trim();
+      const now = Date.now();
+      const record = loginAttempts.get(clientIp);
+
+      if (record && now < record.resetAt) {
+        if (record.count >= 10) {
+          return res.status(429).json({
+            error: 'Too many login attempts. Please try again in 15 minutes.',
+          });
+        }
+        record.count++;
+      } else {
+        loginAttempts.set(clientIp, { count: 1, resetAt: now + 15 * 60 * 1000 });
+      }
+    }
+    const { email, password } = req.body as {
+      email?: string;
+      password?: string;
+    };
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ error: 'Email and password are required.' });
+    }
+
+    const valid = await verifyReviewerCredentials(
+      String(email),
+      String(password),
+    );
+
+    if (!valid) {
+      return res
+        .status(401)
+        .json({ error: 'Invalid email or password.' });
+    }
+
+    issueReviewerCookie(res, String(email).trim().toLowerCase());
+
+    return res.json({
+      ok: true,
+      user: { email: String(email).trim().toLowerCase() },
+    });
+  } catch (err) {
+    console.error('[/api/auth/login] Error:', err);
+    return res.status(500).json({ error: 'Login failed.' });
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Invalidate the reviewer session cookie.
+ */
+router.post('/logout', (_req, res) => {
+  clearReviewerCookie(res);
+  return res.json({ ok: true });
+});
+
+/**
+ * GET /api/auth/me
+ * Report whether a valid reviewer session cookie exists.
+ * Never exposes secrets or credentials.
+ */
+router.get('/me', (req, res) => {
+  const session = verifyReviewerCookie(req);
+  if (!session?.user) {
+    return res.json({ user: null });
+  }
+  return res.json({
+    user: { email: session.user.email },
+  });
 });
 
 export default router;

@@ -43,10 +43,7 @@
     "pdf-parse": "^2.4.5",
     "resend": "^6.26.0",
     "tsx": "^4.19.1",
-    "tsdown": "0.15.9",
-    "typescript": "^5.9.3",
-    "xlsx": "^0.18.5",
-    "xlsx-js-style": "^1.2.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@ai-sdk/provider": "^3.0.5",
@@ -54,7 +51,9 @@
     "@playwright/test": "^1.50.1",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.8.6",
+    "msw": "^2.11.6",
     "concurrently": "^8.2.2",
-    "msw": "^2.11.6"
+    "tsdown": "0.15.9",
+    "typescript": "^5.9.3"
   }
 }

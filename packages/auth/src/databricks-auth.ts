@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Consolidated Databricks authentication module
  * Server-only authentication for OAuth (service principal) and CLI-based OAuth U2M
  * Also handles user session management and SCIM API interactions
@@ -520,8 +520,13 @@ export async function getAuthSession({
 }): Promise<AuthSession | null> {
   try {
     // In test environments, short-circuit auth using forwarded headers or defaults
-    if (isTestEnvironment) {
-      const fwdUser = getRequestHeader('X-Forwarded-User') ?? 'test-user-id';
+    const isTest = process.env.PLAYWRIGHT === 'True';
+    if (isTest) {
+      const explicitUser = getRequestHeader('X-Forwarded-User');
+      if (explicitUser === 'none' || explicitUser === 'anonymous' || getRequestHeader('X-Anonymous') === 'true') {
+        return null;
+      }
+      const fwdUser = explicitUser ?? 'test-user-id';
       const fwdEmail =
         getRequestHeader('X-Forwarded-Email') ?? 'test@example.com';
       const fwdName =
@@ -548,7 +553,8 @@ export async function getAuthSession({
     }
 
     // Check for Databricks Apps headers (production)
-    if (getRequestHeader('X-Forwarded-User')) {
+    const isDatabricksEnv = Boolean(process.env.DATABRICKS_APP_NAME || (process.env.DATABRICKS_HOST && (process.env.DATABRICKS_CLIENT_ID || process.env.DATABRICKS_CONFIG_PROFILE)));
+    if (isDatabricksEnv && getRequestHeader('X-Forwarded-User')) {
       console.log('[getAuthSession] Using Databricks Apps headers');
 
       const forwardedUser = getRequestHeader('X-Forwarded-User');
@@ -607,7 +613,7 @@ export async function getAuthSession({
   }
 }
 
-const isTestEnvironment = process.env.PLAYWRIGHT === 'True';
+// isTest is handled per-request inside getAuthSession
 
 // ============================================================================
 // User from Headers Helper

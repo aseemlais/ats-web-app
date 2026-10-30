@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+﻿import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 import type { ProxyOptions } from "vite";
@@ -25,9 +25,14 @@ const proxyTarget = "http://localhost:3001";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      { find: "@chat-template/core/errors", replacement: path.resolve(__dirname, "../packages/core/dist/errors.js") },
+      { find: "@chat-template/core", replacement: path.resolve(__dirname, "../packages/core/dist/index.js") },
+      { find: "@chat-template/auth", replacement: path.resolve(__dirname, "../packages/auth/dist/index.js") },
+      { find: "@chat-template/db", replacement: path.resolve(__dirname, "../packages/db/dist/index.js") },
+      { find: "@chat-template/utils", replacement: path.resolve(__dirname, "../packages/utils/dist/index.js") },
+    ],
   },
   server: {
     port: process.env.PORT ? Number.parseInt(process.env.PORT) : 3000,
@@ -36,8 +41,6 @@ export default defineConfig({
       "/api/chat": {
         target: proxyTarget,
         changeOrigin: true,
-        // Uncomment this to test situations where the stream will time out.
-        // configure: simulateNetworkError(2000),
       },
 
       "/api": {
@@ -45,7 +48,6 @@ export default defineConfig({
         changeOrigin: true,
       },
 
-      // Send AI agent requests to the Node backend
       "/invocations": {
         target: proxyTarget,
         changeOrigin: true,
