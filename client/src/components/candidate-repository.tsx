@@ -1,4 +1,4 @@
-﻿import { apiFetch } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search,
@@ -90,7 +90,7 @@ export async function fetchCandidates(
 }
 
 export async function fetchCandidateDetail(id: string): Promise<StoredCandidateDetail> {
-  const res = await fetch(`/api/candidates/${encodeURIComponent(id)}`);
+  const res = await apiFetch(`/api/candidates/${encodeURIComponent(id)}?include_resume_text=true`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -99,7 +99,7 @@ export async function fetchCandidateDetail(id: string): Promise<StoredCandidateD
 }
 
 export async function fetchDownloadUrl(id: string): Promise<string> {
-  const res = await fetch(`/api/candidates/${encodeURIComponent(id)}/download`);
+  const res = await apiFetch(`/api/candidates/${encodeURIComponent(id)}/download`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -112,7 +112,7 @@ export async function fetchDownloadUrl(id: string): Promise<string> {
 export async function deleteCandidate(
   id: string,
 ): Promise<{ status: number; body: DeleteResponse }> {
-  const res = await fetch(`/api/candidates/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/candidates/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   const body = (await res.json().catch(() => ({}))) as DeleteResponse;
@@ -414,13 +414,15 @@ export function CandidateRepositoryView({
   onToggleSelect,
   onSelectAll,
   onClearSelection,
+  refreshKey,
 }: {
-  onSelectForScreening?: (candidates: StoredCandidate[]) => void;
+  onSelectForScreening?: (candidates: StoredCandidate[]) => void | Promise<void>;
   selectionMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (candidate: StoredCandidate) => void;
   onSelectAll?: (candidates: StoredCandidate[]) => void;
   onClearSelection?: () => void;
+  refreshKey?: number;
 } = {}) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -428,6 +430,7 @@ export function CandidateRepositoryView({
 
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isPreparingScreening, setIsPreparingScreening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedCandidate, setSelectedCandidate] =
@@ -476,7 +479,7 @@ export function CandidateRepositoryView({
 
   useEffect(() => {
     void loadCandidates();
-  }, [loadCandidates]);
+  }, [loadCandidates, refreshKey]);
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -655,16 +658,34 @@ export function CandidateRepositoryView({
             </span>
             <button
               type="button"
-              onClick={() => onSelectForScreening(selectedCandidatesList)}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+              disabled={isPreparingScreening}
+              onClick={async () => {
+                setIsPreparingScreening(true);
+                try {
+                  await onSelectForScreening(selectedCandidatesList);
+                } finally {
+                  setIsPreparingScreening(false);
+                }
+              }}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
             >
-              <Sparkles className="size-4" />
-              Screen Selected
+              {isPreparingScreening ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Preparing Screening...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-4" />
+                  Screen Selected
+                </>
+              )}
             </button>
             <button
               type="button"
+              disabled={isPreparingScreening}
               onClick={handleClearSelection}
-              className="text-xs font-medium text-slate-600 hover:text-slate-900 underline"
+              className="text-xs font-medium text-slate-600 hover:text-slate-900 underline disabled:opacity-50"
             >
               Clear
             </button>

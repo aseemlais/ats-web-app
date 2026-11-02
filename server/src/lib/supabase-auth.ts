@@ -86,7 +86,21 @@ export async function verifySupabaseToken(
     // User must have an active ReviewerProfile row in ai_chatbot."ReviewerProfile"
     let profile: { role?: string; name?: string; id?: string } | null = null;
     try {
-      const { data, error: profileErr } = await client
+      // Use user token in headers if service role key is not configured,
+      // allowing PostgREST to verify RLS as 'authenticated' with auth.uid() = user.id
+      const hasServiceRoleKey = Boolean(
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY,
+      );
+      const queryClient = hasServiceRoleKey
+        ? client
+        : (url && process.env.SUPABASE_ANON_KEY
+            ? createClient(url, process.env.SUPABASE_ANON_KEY, {
+                global: { headers: { Authorization: `Bearer ${token}` } },
+                auth: { persistSession: false, autoRefreshToken: false },
+              })
+            : client);
+
+      const { data, error: profileErr } = await queryClient
         .schema('ai_chatbot')
         .from('ReviewerProfile')
         .select('id, role, name')

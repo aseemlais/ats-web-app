@@ -9,8 +9,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
+import { authMiddleware } from '../middleware/auth';
 
 const filesRouter = Router();
+
+// Apply auth middleware to capture caller identity for diagnostics
+filesRouter.use(authMiddleware);
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -53,16 +57,15 @@ filesRouter.post(
 
       filePath = req.file.path;
 
-      const originalName =
-        req.file.originalname;
+      const originalName = req.file.originalname;
+      const contentType = req.file.mimetype;
+      const extension = path.extname(originalName).toLowerCase();
+      const fileType = (req.body?.fileType as string) || 'resume';
+      const userEmail = req.session?.user?.email || 'anonymous';
 
-      const contentType =
-        req.file.mimetype;
-
-      const extension =
-        path
-          .extname(originalName)
-          .toLowerCase();
+      console.log(
+        `[Files] Upload received: ${originalName} (type: ${fileType}, user: ${userEmail}, size: ${req.file.size}B)`,
+      );
 
       // ------------------------------------------------------
       // Supported resume formats
@@ -74,14 +77,9 @@ filesRouter.post(
         '.txt',
       ];
 
-      if (
-        !supportedExtensions.includes(
-          extension,
-        )
-      ) {
+      if (!supportedExtensions.includes(extension)) {
         return res.status(400).json({
-          error:
-            'Please upload a PDF, DOCX, or TXT resume.',
+          error: 'Please upload a PDF, DOCX, or TXT resume.',
         });
       }
 
@@ -89,54 +87,103 @@ filesRouter.post(
       // Read uploaded file
       // ------------------------------------------------------
 
-      const fileBuffer =
-        await fs.readFile(filePath);
+      const fileBuffer = await fs.readFile(filePath);
 
       let resumeText = '';
+      let pythonResult: {
+        candidateId?: string | null;
+        isDuplicate?: boolean;
+        storageObjectPath?: string | null;
+        persistenceStatus?: string;
+        candidateName?: string;
+        jobRole?: string;
+      } | null = null;
 
       // ------------------------------------------------------
-      // PDF
+      // Try Python ATS Backend (Supabase Storage + Database)
+      // Only for candidate resumes, not for job descriptions
       // ------------------------------------------------------
 
-      if (extension === '.pdf') {
-        const parser = new PDFParse({
-          data: fileBuffer,
-        });
+      if (fileType !== 'job_description') {
+        const pythonAtsUrl =
+          process.env.PYTHON_ATS_URL ||
+          (process.env.API_PROXY ? process.env.API_PROXY.replace(/\/invocations\/?$/, '') : '') ||
+          'http://localhost:8000';
+
+        const targetUrl = `${pythonAtsUrl.replace(/\/$/, '')}/api/files/upload`;
+        console.log(`[Files] Forwarding resume to Python ATS for persistence: ${targetUrl}`);
 
         try {
-          const parsed =
-            await parser.getText();
+          const formData = new FormData();
+          const blob = new Blob([fileBuffer], {
+            type: contentType || 'application/octet-stream',
+          });
+          formData.append('file', blob, originalName);
 
-          resumeText =
-            parsed.text?.trim() || '';
-        } finally {
-          await parser.destroy();
+          const atsResp = await fetch(targetUrl, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (atsResp.ok) {
+            const atsData = (await atsResp.json()) as {
+              resumeText?: string;
+              candidateId?: string | null;
+              isDuplicate?: boolean;
+              storageObjectPath?: string | null;
+              persistenceStatus?: string;
+              candidateName?: string;
+              jobRole?: string;
+            };
+
+            if (atsData?.resumeText) {
+              resumeText = atsData.resumeText.trim();
+              pythonResult = atsData;
+              console.log(
+                `[Files] Resume persisted to Supabase via Python ATS: ${originalName} ` +
+                `(candidateId: ${atsData.candidateId}, persistence: ${atsData.persistenceStatus || 'persisted'})`,
+              );
+            }
+          } else {
+            const errData = await atsResp.json().catch(() => ({}));
+            console.warn(
+              `[Files] Python ATS upload returned status ${atsResp.status}:`,
+              errData,
+            );
+          }
+        } catch (err) {
+          console.warn(
+            '[Files] Could not connect to Python ATS backend, falling back to local parser:',
+            err instanceof Error ? err.message : err,
+          );
         }
       }
 
       // ------------------------------------------------------
-      // DOCX
+      // Fallback local parsers (for JDs or if Python ATS offline)
       // ------------------------------------------------------
 
-      else if (extension === '.docx') {
-        const result =
-          await mammoth.extractRawText({
+      if (!resumeText) {
+        if (extension === '.pdf') {
+          const parser = new PDFParse({
+            data: fileBuffer,
+          });
+
+          try {
+            const parsed = await parser.getText();
+            resumeText = parsed.text?.trim() || '';
+          } finally {
+            await parser.destroy();
+          }
+        } else if (extension === '.docx') {
+          const result = await mammoth.extractRawText({
             buffer: fileBuffer,
           });
 
-        resumeText =
-          result.value?.trim() || '';
-      }
-
-      // ------------------------------------------------------
-      // TXT
-      // ------------------------------------------------------
-
-      else if (extension === '.txt') {
-        resumeText =
-          fileBuffer
-            .toString('utf8')
-            .trim();
+          resumeText = result.value?.trim() || '';
+        } else if (extension === '.txt') {
+          resumeText = fileBuffer.toString('utf8').trim();
+        }
       }
 
       // ------------------------------------------------------
@@ -146,7 +193,7 @@ filesRouter.post(
       if (!resumeText) {
         return res.status(400).json({
           error:
-            'The resume was uploaded, but no readable text could be extracted from it.',
+            'The file was uploaded, but no readable text could be extracted from it.',
         });
       }
 
@@ -155,30 +202,34 @@ filesRouter.post(
       // ------------------------------------------------------
 
       console.log(
-        `[Files] Resume extracted successfully: ${originalName}`,
-      );
-
-      console.log(
-        `[Files] Extracted characters: ${resumeText.length}`,
+        `[Files] File processed successfully: ${originalName} (${resumeText.length} chars, persisted: ${Boolean(pythonResult?.candidateId)})`,
       );
 
       // ------------------------------------------------------
-      // Return extracted resume text
+      // Return extracted text and persistence metadata
       // ------------------------------------------------------
 
       return res.json({
         success: true,
 
-        url:
-          `/api/files/download/${encodeURIComponent(
-            path.basename(filePath),
-          )}`,
+        url: `/api/files/download/${encodeURIComponent(
+          path.basename(filePath),
+        )}`,
 
         pathname: originalName,
 
         contentType,
 
         resumeText,
+
+        candidateId: pythonResult?.candidateId || null,
+        isDuplicate: Boolean(pythonResult?.isDuplicate),
+        storageObjectPath: pythonResult?.storageObjectPath || null,
+        persistenceStatus:
+          pythonResult?.persistenceStatus ||
+          (pythonResult ? 'persisted' : 'temporary_in_memory'),
+        candidateName: pythonResult?.candidateName,
+        jobRole: pythonResult?.jobRole,
       });
     } catch (error) {
       console.error(

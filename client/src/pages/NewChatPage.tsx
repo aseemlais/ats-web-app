@@ -940,6 +940,9 @@ export default function NewChatPage() {
   const [isScreening, setIsScreening] =
     useState(false);
 
+  const [repoRefreshKey, setRepoRefreshKey] =
+    useState(0);
+
   const [error, setError] =
     useState('');
 
@@ -1163,6 +1166,7 @@ export default function NewChatPage() {
       try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('fileType', 'job_description');
 
         const response = await apiFetch('/api/files/upload', {
           method: 'POST',
@@ -1292,6 +1296,10 @@ export default function NewChatPage() {
             'file',
             file,
           );
+          formData.append(
+            'fileType',
+            'resume',
+          );
 
           const response =
             await apiFetch(
@@ -1342,6 +1350,10 @@ export default function NewChatPage() {
                           'uploaded',
                         error:
                           undefined,
+                        candidateName:
+                          data.candidateName || candidate.candidateName,
+                        originalFilename:
+                          file.name,
                       }
                     : candidate,
               ),
@@ -1372,6 +1384,7 @@ export default function NewChatPage() {
       }
 
       event.target.value = '';
+      setRepoRefreshKey((prev) => prev + 1);
     };
 
   const removeCandidate = (
@@ -1556,8 +1569,11 @@ export default function NewChatPage() {
           continue;
         }
 
-        const fallbackFilename = detail.originalFilename?.trim() ||
-          (detail.candidateName ? `${detail.candidateName.replace(/[^\w\s.-]/g, '_')}.txt` : 'candidate.txt');
+        const fallbackFilename =
+          detail.originalFilename?.trim() ||
+          (detail.candidateName
+            ? `${detail.candidateName.replace(/[^\w\s.-]/g, '_')}.txt`
+            : 'candidate.txt');
 
         const dummyFile = new File(
           [detail.resumeText],
@@ -1580,11 +1596,68 @@ export default function NewChatPage() {
       }
     }
 
+    const storedIds = new Set(storedList.map((s) => s.id));
+    const allSelectedCandidates = [
+      ...candidates.filter((c) => storedIds.has(c.id)),
+      ...addedCandidates,
+    ];
+
     if (addedCandidates.length > 0) {
-      setCandidates((current) => [...current, ...addedCandidates]);
+      setCandidates((current) => {
+        const existingIds = new Set(current.map((c) => c.id));
+        const trulyNew = addedCandidates.filter((c) => !existingIds.has(c.id));
+        return [...current, ...trulyNew];
+      });
+    }
+
+    if (!jobTitle.trim() || !jobDescription.trim()) {
       setActiveView('screening');
-    } else {
-      setError('Could not load resume text for selected candidates.');
+      setError(
+        'Selected candidate(s) added to screening session. Please enter or upload a Job Description and click "Screen Candidates" to start screening.',
+      );
+      return;
+    }
+
+    const candidatesToScreen = allSelectedCandidates.filter(
+      (c) => c.resumeText && c.status !== 'completed' && c.status !== 'screening',
+    );
+
+    if (candidatesToScreen.length === 0) {
+      setActiveView(completedCandidates.length > 0 ? 'results' : 'screening');
+      return;
+    }
+
+    setActiveView('screening');
+    setIsScreening(true);
+
+    try {
+      const SCREENING_BATCH_SIZE = 5;
+      for (
+        let index = 0;
+        index < candidatesToScreen.length;
+        index += SCREENING_BATCH_SIZE
+      ) {
+        const batch = candidatesToScreen.slice(
+          index,
+          index + SCREENING_BATCH_SIZE,
+        );
+
+        await Promise.all(
+          batch.map((candidate) => screenCandidate(candidate)),
+        );
+      }
+
+      setActiveView('results');
+      setSelectedCandidateId(null);
+    } catch (screenError) {
+      console.error('[Screening] Batch screening error:', screenError);
+      setError(
+        screenError instanceof Error
+          ? screenError.message
+          : 'Candidate screening encountered an error.',
+      );
+    } finally {
+      setIsScreening(false);
     }
   };
 
@@ -2864,7 +2937,7 @@ Rules:
           />
 
           {activeView === 'repository' ? (
-            <CandidateRepositoryView onSelectForScreening={handleAddStoredCandidatesToScreening} />
+            <CandidateRepositoryView onSelectForScreening={handleAddStoredCandidatesToScreening} refreshKey={repoRefreshKey} />
           ) : activeView === 'screening' ? (
             isScreening ? (
               <ScreeningProgressView

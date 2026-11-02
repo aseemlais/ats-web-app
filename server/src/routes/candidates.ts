@@ -45,19 +45,25 @@ class ConfigError extends Error {}
 // ---------------------------------------------------------------------------
 
 candidatesRouter.get('/', requireAuth, async (req: Request, res: Response) => {
+  const userEmail = req.session?.user?.email || 'authenticated';
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    console.log(`[candidates] List request from user: ${userEmail} (limit: ${limit}, offset: ${offset})`);
+
     const upstream = await proxyToPython(
       `/api/candidates?limit=${limit}&offset=${offset}`,
     );
     const body = await upstream.text();
+    console.log(`[candidates] List response status: ${upstream.status}`);
     res.status(upstream.status).set('Content-Type', 'application/json').send(body);
   } catch (err) {
     if (err instanceof ConfigError) {
+      console.warn(`[candidates] ConfigError on list: ${(err as Error).message}`);
       return res.status(503).json({ error: (err as Error).message });
     }
-    console.error('[candidates] list error:', err);
+    console.error('[candidates] List error:', err);
     res.status(502).json({ error: 'Upstream error while listing candidates.' });
   }
 });
@@ -68,10 +74,14 @@ candidatesRouter.get('/', requireAuth, async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 candidatesRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
+  const userEmail = req.session?.user?.email || 'authenticated';
   try {
     const q = (req.query.q as string) ?? '';
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    console.log(`[candidates] Search request from user: ${userEmail} (q: "${q}", limit: ${limit}, offset: ${offset})`);
+
     const params = new URLSearchParams({
       q,
       limit: String(limit),
@@ -79,34 +89,44 @@ candidatesRouter.get('/search', requireAuth, async (req: Request, res: Response)
     });
     const upstream = await proxyToPython(`/api/candidates/search?${params}`);
     const body = await upstream.text();
+    console.log(`[candidates] Search response status: ${upstream.status}`);
     res.status(upstream.status).set('Content-Type', 'application/json').send(body);
   } catch (err) {
     if (err instanceof ConfigError) {
+      console.warn(`[candidates] ConfigError on search: ${(err as Error).message}`);
       return res.status(503).json({ error: (err as Error).message });
     }
-    console.error('[candidates] search error:', err);
+    console.error('[candidates] Search error:', err);
     res.status(502).json({ error: 'Upstream error while searching candidates.' });
   }
 });
 
 // ---------------------------------------------------------------------------
 // GET /api/candidates/:id  — retrieve candidate metadata + resume text
+// Forwards query params (e.g. ?include_resume_text=true)
 // ---------------------------------------------------------------------------
 
 candidatesRouter.get('/:id', requireAuth, async (req: Request, res: Response) => {
+  const userEmail = req.session?.user?.email || 'authenticated';
   try {
     const { id } = req.params;
     if (!id || id.trim() === '') {
       return res.status(400).json({ error: 'Candidate ID is required.' });
     }
-    const upstream = await proxyToPython(`/api/candidates/${encodeURIComponent(id)}`);
+
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    console.log(`[candidates] Detail request for ID: ${id} from user: ${userEmail}${queryString}`);
+
+    const upstream = await proxyToPython(`/api/candidates/${encodeURIComponent(id)}${queryString}`);
     const body = await upstream.text();
+    console.log(`[candidates] Detail response status for ${id}: ${upstream.status}`);
     res.status(upstream.status).set('Content-Type', 'application/json').send(body);
   } catch (err) {
     if (err instanceof ConfigError) {
+      console.warn(`[candidates] ConfigError on get: ${(err as Error).message}`);
       return res.status(503).json({ error: (err as Error).message });
     }
-    console.error('[candidates] get error:', err);
+    console.error('[candidates] Get candidate detail error:', err);
     res.status(502).json({ error: 'Upstream error while retrieving candidate.' });
   }
 });
@@ -116,21 +136,27 @@ candidatesRouter.get('/:id', requireAuth, async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 
 candidatesRouter.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
+  const userEmail = req.session?.user?.email || 'authenticated';
   try {
     const { id } = req.params;
     if (!id || id.trim() === '') {
       return res.status(400).json({ error: 'Candidate ID is required.' });
     }
+
+    console.log(`[candidates] Download URL request for ID: ${id} from user: ${userEmail}`);
+
     const upstream = await proxyToPython(
       `/api/candidates/${encodeURIComponent(id)}/download`,
     );
     const body = await upstream.text();
+    console.log(`[candidates] Download response status for ${id}: ${upstream.status}`);
     res.status(upstream.status).set('Content-Type', 'application/json').send(body);
   } catch (err) {
     if (err instanceof ConfigError) {
+      console.warn(`[candidates] ConfigError on download: ${(err as Error).message}`);
       return res.status(503).json({ error: (err as Error).message });
     }
-    console.error('[candidates] download error:', err);
+    console.error('[candidates] Download error:', err);
     res.status(502).json({ error: 'Upstream error while generating download URL.' });
   }
 });
@@ -140,10 +166,14 @@ candidatesRouter.get('/:id/download', requireAuth, async (req: Request, res: Res
 // ---------------------------------------------------------------------------
 
 candidatesRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+  const userEmail = req.session?.user?.email || 'authenticated';
   const token = process.env.ATS_ADMIN_TOKEN;
+
+  console.log(`[candidates] Delete request for ID: ${req.params.id} from user: ${userEmail}`);
 
   // Guard: token must be configured server-side — never expose it or invent one
   if (!token) {
+    console.warn('[candidates] Deletion rejected: ATS_ADMIN_TOKEN is not configured on this server.');
     return res.status(503).json({
       error:
         'Candidate deletion is disabled: ATS_ADMIN_TOKEN is not configured on this server. ' +
@@ -169,6 +199,7 @@ candidatesRouter.delete('/:id', requireAuth, async (req: Request, res: Response)
     );
 
     const body = await upstream.text();
+    console.log(`[candidates] Delete response status for ${id}: ${upstream.status}`);
 
     // 207 = storage deleted but DB row not removed (partial failure)
     // 409 = storage deletion failed; DB row retained for retry safety
@@ -176,9 +207,10 @@ candidatesRouter.delete('/:id', requireAuth, async (req: Request, res: Response)
     res.status(upstream.status).set('Content-Type', 'application/json').send(body);
   } catch (err) {
     if (err instanceof ConfigError) {
+      console.warn(`[candidates] ConfigError on delete: ${(err as Error).message}`);
       return res.status(503).json({ error: (err as Error).message });
     }
-    console.error('[candidates] delete error:', err);
+    console.error('[candidates] Delete error:', err);
     res.status(502).json({ error: 'Upstream error while deleting candidate.' });
   }
 });
