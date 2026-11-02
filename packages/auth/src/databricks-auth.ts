@@ -28,6 +28,7 @@ export interface AuthSession {
 
 export interface ClientSession {
   user: {
+    id?: string;
     email: string;
     name?: string;
     preferredUsername?: string;

@@ -25,6 +25,7 @@ sessionRouter.get('/', async (req: Request, res: Response) => {
   // Return minimal user data for client
   const clientSession: ClientSession = {
     user: {
+      id: session.user.id,
       email: session.user.email,
       name: session.user.name,
       preferredUsername: session.user.preferredUsername,

@@ -55,15 +55,16 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    // Resend is optional. The application should still start
-    // when RESEND_API_KEY is not configured.
+    // Resend is optional. If not configured, gracefully return standard message
+    // without leaking status or failing with 503.
     if (!resend) {
       console.warn(
-        '[forgot-password] RESEND_API_KEY is not configured.',
+        '[forgot-password] RESEND_API_KEY is not configured. Returning standard safe notice.',
       );
 
-      return res.status(503).json({
-        error: 'Password reset email service is not configured.',
+      return res.json({
+        message:
+          'If an account exists for this email, a password reset link has been sent.',
       });
     }
 

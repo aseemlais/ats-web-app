@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { DataPatternLogo } from "@/components/DataPatternLogo";
 type AuthView = "login" | "create" | "forgot";
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -69,6 +70,19 @@ export default function LoginPage() {
 
   // On mount, check if a Supabase session or legacy reviewer session exists
   useEffect(() => {
+    // Forward password recovery tokens or errors immediately to /reset-password
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    if (
+      hash.includes('type=recovery') ||
+      search.includes('type=recovery') ||
+      hash.includes('error=') ||
+      search.includes('error=')
+    ) {
+      navigate(`/reset-password${search}${hash}`, { replace: true });
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const isConfirmed = Boolean(session.user.email_confirmed_at || session.user.confirmed_at);
@@ -230,31 +244,22 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch(
-        "/api/auth/forgot-password",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: trimmedEmail,
-          }),
-        },
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        trimmedEmail,
+        { redirectTo },
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      if (resetError) {
         setError(
-          data?.error ||
+          resetError.message ||
             "Unable to process your password reset request.",
         );
         return;
       }
 
       setSuccessMessage(
-        "If an account exists for this email, a password reset link has been sent.",
+        `If an account exists for ${trimmedEmail}, a password reset link has been sent. Please check your inbox.`,
       );
     } catch (error) {
       console.error(
@@ -263,7 +268,7 @@ export default function LoginPage() {
       );
 
       setError(
-        "Unable to connect to the server. Please try again.",
+        "Unable to connect to the authentication service. Please try again.",
       );
     }
   };
@@ -365,23 +370,10 @@ export default function LoginPage() {
       <header className="relative z-10 px-7 sm:px-8 py-5 sm:py-6">
 
         <div className="flex items-center gap-3">
-
-          <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-sm tracking-tight">
-              DP
-            </span>
-          </div>
-
-          <div>
-            <div className="text-lg font-bold tracking-tight text-slate-950">
-              DataPattern
-            </div>
-
-            <div className="text-xs text-slate-500">
-              AI-powered screening platform
-            </div>
-          </div>
-
+          <DataPatternLogo
+            className="h-[42px] w-auto select-none object-contain"
+            alt="DataPattern - Ensure Transformation"
+          />
         </div>
 
       </header>

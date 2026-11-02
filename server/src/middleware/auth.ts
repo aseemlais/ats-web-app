@@ -18,8 +18,8 @@ declare global {
  * Middleware to authenticate requests and attach session to request object.
  *
  * Authentication Priority:
- *  1. Verified Databricks SSO identity (in a genuine Databricks environment)
- *  2. Verified Supabase Auth token (Authorization: Bearer <token>)
+ *  1. Verified Supabase Auth token (Authorization: Bearer <token>)
+ *  2. Verified Databricks SSO identity (in Databricks Apps or CLI auth environment)
  *  3. Reviewer HMAC-signed session cookie (legacy migration fallback)
  */
 export async function authMiddleware(
@@ -28,18 +28,8 @@ export async function authMiddleware(
   next: NextFunction,
 ) {
   try {
-    // 1. Check Databricks SSO (takes precedence in Databricks Apps or CLI auth)
-    const databricksSession = await getAuthSession({
-      getRequestHeader: (name: string) =>
-        req.headers[name.toLowerCase()] as string | null,
-    });
-
-    if (databricksSession) {
-      req.session = databricksSession;
-      return next();
-    }
-
-    // 2. Check Supabase Auth access token in Authorization: Bearer <token>
+    // 1. Check Supabase Auth access token in Authorization: Bearer <token>
+    // Supabase multi-user auth has highest priority in DataPattern ATS.
     const authHeader = req.headers['authorization'];
     if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7).trim();
@@ -48,6 +38,17 @@ export async function authMiddleware(
         req.session = supabaseSession;
         return next();
       }
+    }
+
+    // 2. Check Databricks SSO (in Databricks Apps or CLI auth environment)
+    const databricksSession = await getAuthSession({
+      getRequestHeader: (name: string) =>
+        req.headers[name.toLowerCase()] as string | null,
+    });
+
+    if (databricksSession) {
+      req.session = databricksSession;
+      return next();
     }
 
     // 3. Fallback: reviewer session cookie (for smooth transition during migration)
