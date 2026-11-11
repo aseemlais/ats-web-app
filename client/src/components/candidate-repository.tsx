@@ -837,7 +837,6 @@ export function CandidateRepositoryView({
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Job Role</th>
                 <th className="px-4 py-3">Skills</th>
-                <th className="px-4 py-3">File</th>
                 <th className="px-4 py-3">Added</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -890,11 +889,6 @@ export function CandidateRepositoryView({
                     </td>
                     <td className="px-4 py-3">
                       {skillChips(c.skills) ?? (
-                        <span className="text-slate-400">\u2014</span>
-                      )}
-                    </td>
-                    <td className="max-w-[140px] truncate px-4 py-3 text-xs text-slate-500">
-                      {c.originalFilename ?? (
                         <span className="text-slate-400">\u2014</span>
                       )}
                     </td>
