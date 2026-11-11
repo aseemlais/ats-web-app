@@ -2771,7 +2771,7 @@ Rules:
                   : 'text-[#7b94a7] hover:bg-[#eef6fa] hover:text-[#033c67]'
               } disabled:cursor-not-allowed disabled:opacity-50`}
             >
-              Repository
+              Candidate Resumes
             </button>
           </div>
 
