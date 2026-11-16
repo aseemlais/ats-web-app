@@ -273,6 +273,26 @@ function safeString(
     : fallback;
 }
 
+// Sanitizes email values from both live and stale Supabase records.
+// Rejects em-dashes (— \u2014, – \u2013), null-ish placeholders, and
+// any string that lacks an '@' — returning the fallback instead.
+function safeEmail(value: unknown, fallback = 'Not available'): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  const EM_DASH_VARIANTS = ['\u2014', '\u2013', '\u2012', '\u2015', '—', '–', '\u002d', '−'];
+  if (
+    !trimmed ||
+    EM_DASH_VARIANTS.includes(trimmed) ||
+    ['—', '–', '-', 'null', 'none', 'not available', 'n/a', 'undefined'].includes(trimmed.toLowerCase()) ||
+    !trimmed.includes('@')
+  ) {
+    return fallback;
+  }
+  // Extract a valid email pattern if present
+  const match = trimmed.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0] : fallback;
+}
+
 // ---------------------------------------------------------------------------
 // Client-side role sanitization
 // Fixes stale Supabase records that contain tool names, date strings,
@@ -541,7 +561,7 @@ function normalizeResult(
       safeArray(parsed.concerns),
 
     email:
-      safeString(
+      safeEmail(
         parsed.email,
         'Not available',
       ),
@@ -2283,7 +2303,7 @@ Rules:
             Rank: index + 1,
             'Candidate Name':
               result?.candidateName || candidate?.candidateName || candidate.file.name.replace(/\.[^/.]+$/, '') || 'Not available',
-            Email: result?.email || 'Not available',
+            Email: safeEmail(result?.email),
             Phone: result?.phone || 'Not available',
             'Job Role':
               result?.jobRole || result?.currentRole || 'Role not identified',

@@ -1,6 +1,18 @@
 import { apiFetch } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+
+// Sanitize email values from Supabase — rejects em-dashes (— \u2014, – \u2013)
+// and any value that lacks '@', returning null instead.
+function sanitizeEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const t = email.trim();
+  const EM = ['—', '–', '‒', '―', '−', '—', '–', '-'];
+  if (EM.includes(t) || !t.includes('@')) return null;
+  const m = t.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : null;
+}
+
   Search,
   X,
   Download,
@@ -304,7 +316,7 @@ function CandidateDetailDrawer({
                 Email
               </p>
               <p className="mt-0.5 text-sm text-slate-700">
-                {detail.email ?? '\u2014'}
+                {sanitizeEmail(detail.email) ?? <span className="text-slate-400">&mdash;</span>}
               </p>
             </div>
 
@@ -882,7 +894,7 @@ export function CandidateRepositoryView({
                       </button>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {c.email ?? <span className="text-slate-400">\u2014</span>}
+                      {sanitizeEmail(c.email) ?? <span className="text-slate-400">&mdash;</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {c.jobRole ?? <span className="text-slate-400">\u2014</span>}
