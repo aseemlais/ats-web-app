@@ -32,6 +32,8 @@ import {
   clearAllAtsDrafts,
 } from '@/lib/ats-storage';
 import { supabase } from '@/lib/supabase';
+import { isAsyncExtractionEnabled } from '@/lib/feature-flags';
+import { extractResumeAsync } from '@/hooks/useResumeExtraction';
 import {
   CandidateRepositoryView,
   fetchCandidateDetail,
@@ -1384,75 +1386,93 @@ export default function NewChatPage() {
         );
 
         try {
-          const formData =
-            new FormData();
-
-          formData.append(
-            'file',
-            file,
-          );
-          formData.append(
-            'fileType',
-            'resume',
-          );
-
-          const response =
-            await apiFetch(
-              '/api/files/upload',
-              {
-                method: 'POST',
-                body: formData,
-              },
-            );
-
-          if (!response.ok) {
-            const data =
-              await response
-                .json()
-                .catch(
-                  () => ({}),
-                );
-
-            throw new Error(
-              data.error ||
-                'Unable to process the resume.',
-            );
-          }
-
-          const data =
-            await response.json();
-
-          if (
-            typeof data.resumeText !==
-            'string'
-          ) {
-            throw new Error(
-              'Resume text could not be extracted.',
-            );
-          }
-
-          setCandidates(
-            (current) =>
-              current.map(
-                (candidate) =>
-                  candidate.id ===
-                  id
-                    ? {
-                        ...candidate,
-                        resumeText:
-                          data.resumeText,
-                        status:
-                          'uploaded',
-                        error:
-                          undefined,
-                        candidateName:
-                          data.candidateName || candidate.candidateName,
-                        originalFilename:
-                          file.name,
-                      }
-                    : candidate,
+          if (isAsyncExtractionEnabled()) {
+            const extracted = await extractResumeAsync(file);
+            setCandidates((current) =>
+              current.map((candidate) =>
+                candidate.id === id
+                  ? {
+                      ...candidate,
+                      resumeText: extracted.resumeText || '',
+                      status: 'uploaded',
+                      error: undefined,
+                      candidateName: extracted.candidateName || candidate.candidateName,
+                      originalFilename: file.name,
+                    }
+                  : candidate,
               ),
-          );
+            );
+          } else {
+              const formData =
+                new FormData();
+    
+              formData.append(
+                'file',
+                file,
+              );
+              formData.append(
+                'fileType',
+                'resume',
+              );
+    
+              const response =
+                await apiFetch(
+                  '/api/files/upload',
+                  {
+                    method: 'POST',
+                    body: formData,
+                  },
+                );
+    
+              if (!response.ok) {
+                const data =
+                  await response
+                    .json()
+                    .catch(
+                      () => ({}),
+                    );
+    
+                throw new Error(
+                  data.error ||
+                    'Unable to process the resume.',
+                );
+              }
+    
+              const data =
+                await response.json();
+    
+              if (
+                typeof data.resumeText !==
+                'string'
+              ) {
+                throw new Error(
+                  'Resume text could not be extracted.',
+                );
+              }
+    
+              setCandidates(
+                (current) =>
+                  current.map(
+                    (candidate) =>
+                      candidate.id ===
+                      id
+                        ? {
+                            ...candidate,
+                            resumeText:
+                              data.resumeText,
+                            status:
+                              'uploaded',
+                            error:
+                              undefined,
+                            candidateName:
+                              data.candidateName || candidate.candidateName,
+                            originalFilename:
+                              file.name,
+                          }
+                        : candidate,
+                  ),
+              );
+          }
         } catch (
           uploadError
         ) {

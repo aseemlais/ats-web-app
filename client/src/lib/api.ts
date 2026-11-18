@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from './supabase';
 
 /**
  * Perform an authenticated fetch request to the Node.js backend.
@@ -23,9 +23,20 @@ export async function apiFetch(
     console.warn('[apiFetch] Could not retrieve Supabase session token:', err);
   }
 
-  return fetch(input, {
+  // Resolve relative URLs in non-browser or test environments (e.g. Node.js undici fetch)
+  let resolvedInput = input;
+  if (typeof input === 'string' && input.startsWith('/')) {
+    const base =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost:3000';
+    resolvedInput = `${base}${input}`;
+  }
+
+  return fetch(resolvedInput, {
     ...init,
     headers,
     credentials: init?.credentials ?? 'include',
   });
 }
+

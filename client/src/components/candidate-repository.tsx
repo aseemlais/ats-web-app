@@ -1,18 +1,6 @@
 import { apiFetch } from '@/lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-
-// Sanitize email values from Supabase — rejects em-dashes (— \u2014, – \u2013)
-// and any value that lacks '@', returning null instead.
-function sanitizeEmail(email: string | null | undefined): string | null {
-  if (!email) return null;
-  const t = email.trim();
-  const EM = ['—', '–', '‒', '―', '−', '—', '–', '-'];
-  if (EM.includes(t) || !t.includes('@')) return null;
-  const m = t.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
-  return m ? m[0] : null;
-}
-
   Search,
   X,
   Download,
@@ -30,6 +18,17 @@ function sanitizeEmail(email: string | null | undefined): string | null {
   Square,
   Sparkles,
 } from 'lucide-react';
+
+// Sanitize email values from Supabase — rejects em-dashes (— \u2014, – \u2013)
+// and any value that lacks '@', returning null instead.
+function sanitizeEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const t = email.trim();
+  const EM = ['—', '–', '‒', '―', '−', '—', '–', '-'];
+  if (EM.includes(t) || !t.includes('@')) return null;
+  const m = t.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : null;
+}
 
 // ---------------------------------------------------------------------------
 // Types

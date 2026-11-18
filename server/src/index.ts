@@ -1,4 +1,4 @@
-﻿// Load environment variables FIRST before any other imports
+// Load environment variables FIRST before any other imports
 import './env';
 
 import express, {
@@ -24,6 +24,7 @@ import { configRouter } from './routes/config';
 import { feedbackRouter } from './routes/feedback';
 import { filesRouter } from './routes/files';
 import { candidatesRouter } from './routes/candidates';
+import { extractionRouter } from './routes/extraction';
 import { authMiddleware, requireAuth } from './middleware/auth';
 import { ChatSDKError } from '@chat-template/core/errors';
 
@@ -108,6 +109,8 @@ app.use('/api/feedback', feedbackRouter);
 app.use('/api/files', filesRouter);
 
 app.use('/api/candidates', candidatesRouter);
+
+app.use('/api/extract', extractionRouter);
 
 // ============================================================
 // AGENT BACKEND PROXY
@@ -528,3 +531,4 @@ async function startServer() {
 startServer();
 
 export default app;
+

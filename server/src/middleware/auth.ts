@@ -28,6 +28,9 @@ export async function authMiddleware(
   next: NextFunction,
 ) {
   try {
+    if (req.session?.user) {
+      return next();
+    }
     // 1. Check Supabase Auth access token in Authorization: Bearer <token>
     // Supabase multi-user auth has highest priority in DataPattern ATS.
     const authHeader = req.headers['authorization'];
@@ -106,3 +109,4 @@ export const getIdFromRequest = (req: Request): string | undefined => {
   if (!id) return undefined;
   return typeof id === 'string' ? id : id[0];
 };
+

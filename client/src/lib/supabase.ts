@@ -1,13 +1,20 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const env =
+  typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env
+    : (typeof process !== 'undefined' ? process.env : {}) as Record<string, string | undefined>;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    '[Supabase Client] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. ' +
-    'Please set these environment variables in your client configuration.'
-  );
+const supabaseUrl = env?.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = env?.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+
+if (!env?.VITE_SUPABASE_URL || !env?.VITE_SUPABASE_ANON_KEY) {
+  if (typeof window !== 'undefined') {
+    console.warn(
+      '[Supabase Client] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. ' +
+      'Please set these environment variables in your client configuration.'
+    );
+  }
 }
 
 /**
