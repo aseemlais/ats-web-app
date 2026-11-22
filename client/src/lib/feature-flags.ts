@@ -7,7 +7,7 @@
  *   1. URL query param: ?asyncExtraction=true / ?asyncExtraction=false
  *   2. localStorage: ats_use_async_extraction === 'true' / 'false'
  *   3. Env var: VITE_USE_ASYNC_EXTRACTION === 'true'
- *   4. Default: false (maintains 100% backward compatibility with synchronous /api/files/upload)
+ *   4. Default: true (activates modern extraction with async queue & SLM cutover)
  */
 
 export function isAsyncExtractionEnabled(): boolean {
@@ -26,10 +26,7 @@ export function isAsyncExtractionEnabled(): boolean {
     }
   }
 
-  return (
-    typeof import.meta !== 'undefined' &&
-    import.meta.env?.VITE_USE_ASYNC_EXTRACTION === 'true'
-  );
+  return true;
 }
 
 export function setAsyncExtractionFlag(enabled: boolean): void {
