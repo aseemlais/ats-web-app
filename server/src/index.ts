@@ -25,6 +25,7 @@ import { feedbackRouter } from './routes/feedback';
 import { filesRouter } from './routes/files';
 import { candidatesRouter } from './routes/candidates';
 import { extractionRouter } from './routes/extraction';
+import { sharepointRouter } from './routes/sharepoint';
 import { authMiddleware, requireAuth } from './middleware/auth';
 import { ChatSDKError } from '@chat-template/core/errors';
 
@@ -111,6 +112,8 @@ app.use('/api/files', filesRouter);
 app.use('/api/candidates', candidatesRouter);
 
 app.use('/api/extract', extractionRouter);
+
+app.use('/api/sharepoint', sharepointRouter);
 
 // ============================================================
 // AGENT BACKEND PROXY

@@ -22,7 +22,9 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  Cloud,
 } from 'lucide-react';
+import { SharePointBrowserModal } from '../components/SharePointBrowserModal';
 import * as XLSX from 'xlsx';
 import { apiFetch } from '@/lib/api';
 import { DataPatternLogo } from '@/components/DataPatternLogo';
@@ -992,6 +994,39 @@ export default function NewChatPage() {
 
   const [isSettingsOpen, setIsSettingsOpen] =
     useState(false);
+
+  const [isSharePointModalOpen, setIsSharePointModalOpen] = useState(false);
+
+  const handleImportSharePointCandidates = (
+    imported: Array<{
+      fileName: string;
+      resumeText: string;
+      candidateId?: string;
+      candidateName?: string;
+      jobRole?: string;
+    }>,
+  ) => {
+    const newCandidates: Candidate[] = [];
+    for (const item of imported) {
+      const file = new File([item.resumeText], item.fileName, {
+        type: 'text/plain',
+      });
+      const duplicate = candidates.some(
+        (c) => c.file.name === file.name && c.file.size === file.size,
+      );
+      if (duplicate) continue;
+      newCandidates.push({
+        id: item.candidateId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        resumeText: item.resumeText,
+        status: 'uploaded',
+        result: null,
+      });
+    }
+    if (newCandidates.length > 0) {
+      setCandidates((curr) => [...curr, ...newCandidates]);
+    }
+  };
 
   const [profileName, setProfileName] =
     useState('');
@@ -2973,6 +3008,12 @@ Rules:
         </div>
       )}
 
+      <SharePointBrowserModal
+        isOpen={isSharePointModalOpen}
+        onClose={() => setIsSharePointModalOpen(false)}
+        onImportCandidates={handleImportSharePointCandidates}
+      />
+
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#033c67]/30 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl">
@@ -3082,6 +3123,7 @@ Rules:
                 isFetchingSharePoint={isFetchingSharePoint}
                 onSharePointLinkChange={setSharePointLink}
                 onSharePointFetch={handleSharePointFetch}
+                onOpenSharePointModal={() => setIsSharePointModalOpen(true)}
                 onRemove={removeCandidate}
                 onClearAll={clearAllCandidates}
                 isScreening={isScreening}
@@ -3231,6 +3273,7 @@ function ScreeningView({
   isFetchingSharePoint,
   onSharePointLinkChange,
   onSharePointFetch,
+  onOpenSharePointModal,
   onOpenRepository,
   onRemove,
   onClearAll,
@@ -3266,6 +3309,7 @@ function ScreeningView({
   isFetchingSharePoint: boolean;
   onSharePointLinkChange: (value: string) => void;
   onSharePointFetch: () => void;
+  onOpenSharePointModal: () => void;
   onOpenRepository?: () => void;
   onRemove: (
     id: string,
@@ -3440,6 +3484,16 @@ function ScreeningView({
                     <Loader2 className="size-4 animate-spin" />
                   )}
                   {isFetchingSharePoint ? 'Fetching...' : 'Fetch Resumes'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onOpenSharePointModal}
+                  disabled={isFetchingSharePoint || isScreening}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#b9d5e6] bg-white px-4 py-3 text-sm font-semibold text-[#033c67] transition hover:bg-[#eef6fa] hover:border-[#033c67] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Cloud className="size-4 text-[#033c67]" />
+                  Browse Folders
                 </button>
               </div>
 
