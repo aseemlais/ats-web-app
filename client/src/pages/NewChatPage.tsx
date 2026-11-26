@@ -931,6 +931,18 @@ function extractJobTitleFromJd(text: string): string {
     return lines[titleIndex + 1].trim();
   }
 
+  // Fallback: check the first 3 non-empty lines for a short title-like phrase
+  for (const line of lines.slice(0, 3)) {
+    const trimmed = line.replace(/^[#*-\s]+/, '').trim();
+    if (
+      trimmed.length >= 3 &&
+      trimmed.length <= 60 &&
+      !/^(about\s+us|overview|company|introduction|we\s+are|welcome)/i.test(trimmed)
+    ) {
+      return trimmed;
+    }
+  }
+
   return '';
 }
 
@@ -1164,13 +1176,12 @@ export default function NewChatPage() {
   const userEmail = sessionUser?.email || '';
 
   const readiness = Boolean(
-    jobTitle.trim() &&
-      jobDescription.trim() &&
+    jobDescription.trim() &&
       candidates.length > 0 &&
-      candidates.every(
+      !candidates.some((candidate) => candidate.status === 'screening') &&
+      candidates.some(
         (candidate) =>
-          candidate.resumeText &&
-          candidate.status === 'uploaded',
+          candidate.resumeText && candidate.status !== 'completed',
       ),
   );
 
@@ -1323,8 +1334,10 @@ export default function NewChatPage() {
         const extractedJdText = data.resumeText.trim();
         setJobDescription(extractedJdText);
 
-        const extractedJobTitle = extractJobTitleFromJd(extractedJdText);
-        if (extractedJobTitle) {
+        const extractedJobTitle =
+          extractJobTitleFromJd(extractedJdText) ||
+          file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+        if (extractedJobTitle && !jobTitle.trim()) {
           setJobTitle(extractedJobTitle);
         }
       } catch (uploadError) {
@@ -1760,10 +1773,19 @@ export default function NewChatPage() {
       });
     }
 
-    if (!jobTitle.trim() || !jobDescription.trim()) {
+    let effectiveJobTitle = jobTitle.trim();
+    if (!effectiveJobTitle && jobDescription.trim()) {
+      effectiveJobTitle =
+        extractJobTitleFromJd(jobDescription) ||
+        (jdFileName ? jdFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ') : '') ||
+        'Role Requirements';
+      setJobTitle(effectiveJobTitle);
+    }
+
+    if (!jobDescription.trim()) {
       setActiveView('screening');
       setError(
-        'Selected candidate(s) added to screening session. Please enter or upload a Job Description and click "Screen Candidates" to start screening.',
+        'Selected candidate(s) added to screening session. Please enter or upload a Job Description to start screening.',
       );
       return;
     }
@@ -1976,18 +1998,19 @@ Rules:
     async () => {
       setError('');
 
-      if (!jobTitle.trim()) {
-        setError(
-          'Please enter the job title.',
-        );
-        return;
+      let effectiveJobTitle = jobTitle.trim();
+      if (!effectiveJobTitle) {
+        effectiveJobTitle =
+          extractJobTitleFromJd(jobDescription) ||
+          (jdFileName ? jdFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ') : '') ||
+          jobDescription.split('\n').find((l) => l.trim().length > 0)?.slice(0, 50).trim() ||
+          'Role Requirements';
+        setJobTitle(effectiveJobTitle);
       }
 
-      if (
-        !jobDescription.trim()
-      ) {
+      if (!jobDescription.trim()) {
         setError(
-          'Please enter the job description and requirements.',
+          'Please enter or upload the job description and requirements.',
         );
         return;
       }
@@ -3700,10 +3723,12 @@ function ScreeningView({
 
           <div className="mt-1 text-xs text-[#5b7890]">
             {candidates.length === 0
-              ? 'Upload candidate resumes to begin'
-              : candidates.some((candidate) => candidate.status === 'screening')
-                ? 'Processing uploaded resumes. The screening button will be available when all resumes are ready.'
-                : `${candidates.length} candidate${candidates.length === 1 ? '' : 's'} ready for AI evaluation`}
+              ? 'Upload or import candidate resumes to begin'
+              : !jobDescription.trim()
+                ? 'Please add or upload a Job Description to enable screening'
+                : candidates.some((candidate) => candidate.status === 'screening')
+                  ? 'Processing uploaded resumes. The screening button will be available when all resumes are ready.'
+                  : `${candidates.length} candidate${candidates.length === 1 ? '' : 's'} ready for AI evaluation — click Start Screening`}
           </div>
         </div>
 

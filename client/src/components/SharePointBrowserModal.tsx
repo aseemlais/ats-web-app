@@ -125,9 +125,17 @@ export const SharePointBrowserModal: React.FC<SharePointBrowserModalProps> = ({
     });
   };
 
-  const resumeFiles = (folderData?.items || []).filter(
-    (item) => item.type === 'file' && ['.pdf', '.docx', '.txt', ''].includes(item.extension?.toLowerCase() || ''),
-  );
+  const resumeFiles = (folderData?.items || []).filter((item) => {
+    if (item.type !== 'file') return false;
+    const name = item.name.toLowerCase();
+    const ext = (item.extension || '').toLowerCase();
+    return (
+      ['.pdf', '.docx', '.txt'].includes(ext) ||
+      name.endsWith('.pdf') ||
+      name.endsWith('.docx') ||
+      name.endsWith('.txt')
+    );
+  });
 
   const areAllCurrentSelected =
     resumeFiles.length > 0 && resumeFiles.every((f) => selectedPaths.has(f.path));
