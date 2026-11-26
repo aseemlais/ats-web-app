@@ -246,7 +246,7 @@ export const SharePointBrowserModal: React.FC<SharePointBrowserModalProps> = ({
               onClick={() => loadFolder('')}
               className={`hover:text-[#033c67] hover:underline ${!currentPath ? 'font-bold text-[#033c67]' : ''}`}
             >
-              SharePoint Root
+              Canada 🍁 Files
             </button>
             {pathParts.map((part, index) => {
               const subPath = pathParts.slice(0, index + 1).join('/');
